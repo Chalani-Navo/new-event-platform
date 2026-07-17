@@ -30,8 +30,5 @@ desktop.ini
 *.tfstate
 *.tfstate.*
 
-# Kubernetes secrets
-kubernetes/02-secret-template.yaml
-
 # Python cache
 .pytest_cache/
