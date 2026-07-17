@@ -1,0 +1,37 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+
+# Virtual environments
+venv/
+.env/
+.venv/
+
+# VS Code
+.vscode/
+
+# Docker
+*.log
+
+# macOS
+.DS_Store
+
+# Windows
+Thumbs.db
+desktop.ini
+
+# Environment files
+.env
+
+# Terraform
+*.tfstate
+*.tfstate.*
+
+# Kubernetes secrets
+kubernetes/02-secret-template.yaml
+
+# Python cache
+.pytest_cache/

@@ -1,0 +1,47 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: new-event-ingress
+  namespace: new-event
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
+spec:
+  ingressClassName: nginx
+  rules:
+    - http:
+        paths:
+          - path: /event-api(/|$)(.*)
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: event-service
+                port:
+                  number: 5000
+          - path: /program-api(/|$)(.*)
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: program-service
+                port:
+                  number: 5001
+          - path: /registration-api(/|$)(.*)
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: registration-service
+                port:
+                  number: 5002
+          - path: /analytics-api(/|$)(.*)
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: analytics-service
+                port:
+                  number: 5003
+          - path: /(.*)
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: frontend
+                port:
+                  number: 80
