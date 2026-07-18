@@ -32,3 +32,6 @@ desktop.ini
 
 # Python cache
 .pytest_cache/
+
+# Real Kubernetes secrets
+kubernetes/02-secret.yaml
