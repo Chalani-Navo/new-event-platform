@@ -35,3 +35,7 @@ desktop.ini
 
 # Real Kubernetes secrets
 kubernetes/02-secret.yaml
+
+# Generated Lambda files
+lambda/response.json
+lambda/low-seat-alert.zip
