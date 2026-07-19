@@ -10,7 +10,7 @@
       "Condition": {
         "StringEquals": {
           "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
-          "token.actions.githubusercontent.com:sub": "repo:Chalani-Navo/new-event-platform:ref:refs/heads/main"
+          "token.actions.githubusercontent.com:sub": "repo:Chalani-Navo@306329294/new-event-platform@1304442179:ref:refs/heads/main"
         }
       }
     }
