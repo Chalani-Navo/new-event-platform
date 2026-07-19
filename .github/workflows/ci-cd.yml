@@ -1,0 +1,78 @@
+name: Build and Deploy to EKS
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: ap-southeast-1
+  ECR_REGISTRY: 790304250595.dkr.ecr.ap-southeast-1.amazonaws.com
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::790304250595:role/new-event-github-actions-role
+          aws-region: ap-southeast-1
+
+      - name: Login to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build Event Service
+        run: |
+          docker build -t $ECR_REGISTRY/event-service:latest ./services/event-service
+          docker push $ECR_REGISTRY/event-service:latest
+
+      - name: Build Program Service
+        run: |
+          docker build -t $ECR_REGISTRY/program-service:latest ./services/program-service
+          docker push $ECR_REGISTRY/program-service:latest
+
+      - name: Build Registration Service
+        run: |
+          docker build -t $ECR_REGISTRY/registration-service:latest ./services/registration-service
+          docker push $ECR_REGISTRY/registration-service:latest
+
+      - name: Build Analytics Service
+        run: |
+          docker build -t $ECR_REGISTRY/analytics-service:latest ./services/analytics-service
+          docker push $ECR_REGISTRY/analytics-service:latest
+
+      - name: Build Frontend
+        run: |
+          docker build -t $ECR_REGISTRY/frontend:latest ./frontend
+          docker push $ECR_REGISTRY/frontend:latest
+
+      - name: Configure kubectl
+        run: |
+          aws eks update-kubeconfig \
+            --name new-event-cluster \
+            --region ap-southeast-1
+
+      - name: Restart Deployments
+        run: |
+          kubectl rollout restart deployment frontend -n new-event
+          kubectl rollout restart deployment event-service -n new-event
+          kubectl rollout restart deployment program-service -n new-event
+          kubectl rollout restart deployment registration-service -n new-event
+          kubectl rollout restart deployment analytics-service -n new-event
+
+      - name: Wait for rollout
+        run: |
+          kubectl rollout status deployment/frontend -n new-event
+          kubectl rollout status deployment/event-service -n new-event
+          kubectl rollout status deployment/program-service -n new-event
+          kubectl rollout status deployment/registration-service -n new-event
+          kubectl rollout status deployment/analytics-service -n new-event
