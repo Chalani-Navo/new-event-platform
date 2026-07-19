@@ -1,0 +1,1 @@
+{"statusCode": 201, "body": "{\"message\": \"Low-seat notification written to S3\", \"bucket\": \"new-event-low-seat-alerts-790304250595\", \"objectKey\": \"low-seat-alerts/test-event-001/2026-07-19T05-30-00Z.json\"}"}

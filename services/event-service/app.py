@@ -1,7 +1,9 @@
+import json
 import os
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 
+import boto3
 from dotenv import load_dotenv
 from flask import Flask, jsonify, request
 from flask_sqlalchemy import SQLAlchemy
@@ -15,6 +17,17 @@ app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
 db = SQLAlchemy(app)
 
+AWS_REGION = os.getenv("AWS_REGION", "ap-southeast-1")
+LAMBDA_FUNCTION_NAME = os.getenv(
+    "LAMBDA_FUNCTION_NAME",
+    "new-event-low-seat-alert"
+)
+
+lambda_client = boto3.client(
+    "lambda",
+    region_name=AWS_REGION
+)
+
 
 class Event(db.Model):
     __tablename__ = "events"
@@ -26,7 +39,7 @@ class Event(db.Model):
     )
     title = db.Column(db.String(200), nullable=False)
     venue = db.Column(db.String(200), nullable=False)
-    event_datetime = db.Column(db.DateTime, nullable=False)
+    date_time = db.Column(db.DateTime, nullable=False)
     ticket_price = db.Column(db.Numeric(10, 2), nullable=False)
     capacity = db.Column(db.Integer, nullable=False)
     seats_available = db.Column(db.Integer, nullable=False)
@@ -36,11 +49,30 @@ class Event(db.Model):
             "eventId": self.event_id,
             "title": self.title,
             "venue": self.venue,
-            "dateTime": self.event_datetime.isoformat(),
+            "dateTime": self.date_time.isoformat(),
             "ticketPrice": float(self.ticket_price),
             "capacity": self.capacity,
             "seatsAvailable": self.seats_available
         }
+
+
+def invoke_low_seat_lambda(event):
+    """Invoke the low-seat Lambda asynchronously."""
+
+    payload = {
+        "eventId": event.event_id,
+        "eventTitle": event.title,
+        "remainingSeats": event.seats_available,
+        "timestamp": datetime.now(timezone.utc).isoformat()
+    }
+
+    response = lambda_client.invoke(
+        FunctionName=LAMBDA_FUNCTION_NAME,
+        InvocationType="Event",
+        Payload=json.dumps(payload).encode("utf-8")
+    )
+
+    return response.get("StatusCode")
 
 
 @app.route("/health")
@@ -55,10 +87,12 @@ def health():
 def ready():
     try:
         db.session.execute(db.text("SELECT 1"))
+
         return jsonify({
             "status": "READY",
             "database": "CONNECTED"
         })
+
     except Exception:
         return jsonify({
             "status": "NOT_READY",
@@ -90,7 +124,8 @@ def create_event():
         }), 400
 
     missing_fields = [
-        field for field in required_fields
+        field
+        for field in required_fields
         if field not in data
     ]
 
@@ -103,7 +138,10 @@ def create_event():
     try:
         capacity = int(data["capacity"])
         ticket_price = float(data["ticketPrice"])
-        event_datetime = datetime.fromisoformat(data["dateTime"])
+
+        date_time = datetime.fromisoformat(
+            data["dateTime"].replace("Z", "+00:00")
+        )
 
         if capacity <= 0:
             return jsonify({
@@ -118,7 +156,7 @@ def create_event():
         event = Event(
             title=data["title"],
             venue=data["venue"],
-            event_datetime=event_datetime,
+            date_time=date_time,
             ticket_price=ticket_price,
             capacity=capacity,
             seats_available=capacity
@@ -132,8 +170,8 @@ def create_event():
     except (TypeError, ValueError):
         return jsonify({
             "error": (
-                "capacity and ticketPrice must be valid numbers, "
-                "and dateTime must use ISO format"
+                "capacity, ticketPrice and dateTime "
+                "must contain valid values"
             )
         }), 400
 
@@ -176,14 +214,43 @@ def reserve_seats(event_id):
                 "seatsAvailable": event.seats_available
             }), 409
 
+        previous_seats = event.seats_available
         event.seats_available -= ticket_count
+
+        # Trigger only when the seat count crosses from 10 or more
+        # to fewer than 10. This prevents duplicate alerts.
+        low_seat_threshold_crossed = (
+            previous_seats >= 10
+            and event.seats_available < 10
+        )
+
         db.session.commit()
+
+        lambda_invoked = False
+        lambda_status_code = None
+        lambda_error = None
+
+        if low_seat_threshold_crossed:
+            try:
+                lambda_status_code = invoke_low_seat_lambda(event)
+                lambda_invoked = True
+
+            except Exception as error:
+                # Do not undo a successful seat reservation merely because
+                # the alert invocation failed.
+                lambda_error = str(error)
+                app.logger.exception(
+                    "Unable to invoke low-seat Lambda"
+                )
 
         return jsonify({
             "eventId": event.event_id,
             "reservedSeats": ticket_count,
             "seatsAvailable": event.seats_available,
-            "lowSeatAlert": event.seats_available < 10
+            "lowSeatAlert": low_seat_threshold_crossed,
+            "lambdaInvoked": lambda_invoked,
+            "lambdaStatusCode": lambda_status_code,
+            "lambdaError": lambda_error
         }), 200
 
     except (TypeError, ValueError):

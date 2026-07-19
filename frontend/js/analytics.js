@@ -1,5 +1,5 @@
 const ANALYTICS_API_URL =
-    "http://127.0.0.1:5003/api/v1/analytics";
+    "http:/analytics-api/api/v1/analytics";
 
 function getSessionId() {
     let sessionId = sessionStorage.getItem("newEventSessionId");

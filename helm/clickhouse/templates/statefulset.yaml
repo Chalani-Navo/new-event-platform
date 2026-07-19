@@ -1,0 +1,83 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: clickhouse
+  labels:
+    app: clickhouse
+spec:
+  serviceName: clickhouse
+  replicas: {{ .Values.replicaCount }}
+
+  selector:
+    matchLabels:
+      app: clickhouse
+
+  template:
+    metadata:
+      labels:
+        app: clickhouse
+
+    spec:
+      containers:
+        - name: clickhouse
+
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+
+          ports:
+            - name: http
+              containerPort: 8123
+
+            - name: native
+              containerPort: 9000
+
+          env:
+            - name: CLICKHOUSE_USER
+              valueFrom:
+                secretKeyRef:
+                  name: new-event-secrets
+                  key: CLICKHOUSE_USER
+
+            - name: CLICKHOUSE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: new-event-secrets
+                  key: CLICKHOUSE_PASSWORD
+
+            - name: CLICKHOUSE_DB
+              valueFrom:
+                configMapKeyRef:
+                  name: new-event-config
+                  key: CLICKHOUSE_DATABASE
+
+            - name: CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT
+              value: "1"
+
+          readinessProbe:
+            httpGet:
+              path: /ping
+              port: 8123
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+
+          livenessProbe:
+            httpGet:
+              path: /ping
+              port: 8123
+            initialDelaySeconds: 40
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 3
+
+          resources:
+{{ toYaml .Values.resources | indent 12 }}
+
+          volumeMounts:
+            - name: clickhouse-data
+              mountPath: /var/lib/clickhouse
+
+      volumes:
+        - name: clickhouse-data
+          emptyDir: {}

@@ -1,0 +1,18 @@
+replicaCount: 1
+
+image:
+  repository: clickhouse/clickhouse-server
+  tag: latest
+  pullPolicy: IfNotPresent
+
+service:
+  httpPort: 8123
+  nativePort: 9000
+
+resources:
+  requests:
+    cpu: "250m"
+    memory: "512Mi"
+  limits:
+    cpu: "750m"
+    memory: "1Gi"
