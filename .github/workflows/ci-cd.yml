@@ -1,154 +1,424 @@
-name: Build and Deploy to EKS
+name: Blue-Green Build and Deploy to EKS
 
 on:
   push:
     branches:
       - main
 
+  workflow_dispatch:
+
 permissions:
   id-token: write
   contents: read
 
+concurrency:
+  group: new-event-production-deployment
+  cancel-in-progress: false
+
 env:
   AWS_REGION: ap-southeast-1
+  AWS_ACCOUNT_ID: "790304250595"
+  EKS_CLUSTER_NAME: new-event-cluster
+  KUBERNETES_NAMESPACE: new-event
   ECR_REGISTRY: 790304250595.dkr.ecr.ap-southeast-1.amazonaws.com
 
 jobs:
   deploy:
+    name: Build and Blue-Green Deploy
     runs-on: ubuntu-latest
+    timeout-minutes: 45
 
     steps:
+      # ---------------------------------------------------------
+      # CHECKOUT AND AWS AUTHENTICATION
+      # ---------------------------------------------------------
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Show GitHub OIDC claims
-        shell: bash
-        run: |
-          TOKEN_RESPONSE=$(curl -sS \
-            -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
-            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=sts.amazonaws.com")
-
-          ID_TOKEN=$(echo "$TOKEN_RESPONSE" | python3 -c \
-            "import sys, json; print(json.load(sys.stdin)['value'])")
-
-          export ID_TOKEN
-
-          python3 - <<'PY'
-          import os
-          import json
-          import base64
-
-          token = os.environ["ID_TOKEN"]
-
-          payload = token.split(".")[1]
-          payload += "=" * (-len(payload) % 4)
-
-          claims = json.loads(
-              base64.urlsafe_b64decode(payload).decode("utf-8")
-          )
-
-          print("aud =", claims.get("aud"))
-          print("sub =", claims.get("sub"))
-          print("repository =", claims.get("repository"))
-          print("ref =", claims.get("ref"))
-          PY
-
-      - name: Configure AWS Credentials
+      - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: arn:aws:iam::790304250595:role/new-event-github-actions-role
           role-session-name: new-event-github-actions
-          aws-region: ap-southeast-1
+          aws-region: ${{ env.AWS_REGION }}
 
       - name: Login to Amazon ECR
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Build Event Service
+      # ---------------------------------------------------------
+      # BUILD AND PUSH FRONTEND
+      # ---------------------------------------------------------
+      - name: Build and push Frontend
+        shell: bash
         run: |
+          set -euo pipefail
+
+          IMAGE_SHA="$ECR_REGISTRY/frontend:$GITHUB_SHA"
+          IMAGE_LATEST="$ECR_REGISTRY/frontend:latest"
+
           docker build \
-            -t $ECR_REGISTRY/event-service:latest \
-            ./services/event-service
-
-          docker push \
-            $ECR_REGISTRY/event-service:latest
-
-      - name: Build Program Service
-        run: |
-          docker build \
-            -t $ECR_REGISTRY/program-service:latest \
-            ./services/program-service
-
-          docker push \
-            $ECR_REGISTRY/program-service:latest
-
-      - name: Build Registration Service
-        run: |
-          docker build \
-            -t $ECR_REGISTRY/registration-service:latest \
-            ./services/registration-service
-
-          docker push \
-            $ECR_REGISTRY/registration-service:latest
-
-      - name: Build Analytics Service
-        run: |
-          docker build \
-            -t $ECR_REGISTRY/analytics-service:latest \
-            ./services/analytics-service
-
-          docker push \
-            $ECR_REGISTRY/analytics-service:latest
-
-      - name: Build Frontend
-        run: |
-          docker build \
-            -t $ECR_REGISTRY/frontend:latest \
+            -t "$IMAGE_SHA" \
+            -t "$IMAGE_LATEST" \
             ./frontend
 
-          docker push \
-            $ECR_REGISTRY/frontend:latest
+          docker push "$IMAGE_SHA"
+          docker push "$IMAGE_LATEST"
 
+      # ---------------------------------------------------------
+      # BUILD AND PUSH EVENT SERVICE
+      # ---------------------------------------------------------
+      - name: Build and push Event Service
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          IMAGE_SHA="$ECR_REGISTRY/event-service:$GITHUB_SHA"
+          IMAGE_LATEST="$ECR_REGISTRY/event-service:latest"
+
+          docker build \
+            -t "$IMAGE_SHA" \
+            -t "$IMAGE_LATEST" \
+            ./services/event-service
+
+          docker push "$IMAGE_SHA"
+          docker push "$IMAGE_LATEST"
+
+      # ---------------------------------------------------------
+      # BUILD AND PUSH PROGRAM SERVICE
+      # ---------------------------------------------------------
+      - name: Build and push Program Service
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          IMAGE_SHA="$ECR_REGISTRY/program-service:$GITHUB_SHA"
+          IMAGE_LATEST="$ECR_REGISTRY/program-service:latest"
+
+          docker build \
+            -t "$IMAGE_SHA" \
+            -t "$IMAGE_LATEST" \
+            ./services/program-service
+
+          docker push "$IMAGE_SHA"
+          docker push "$IMAGE_LATEST"
+
+      # ---------------------------------------------------------
+      # BUILD AND PUSH REGISTRATION SERVICE
+      # ---------------------------------------------------------
+      - name: Build and push Registration Service
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          IMAGE_SHA="$ECR_REGISTRY/registration-service:$GITHUB_SHA"
+          IMAGE_LATEST="$ECR_REGISTRY/registration-service:latest"
+
+          docker build \
+            -t "$IMAGE_SHA" \
+            -t "$IMAGE_LATEST" \
+            ./services/registration-service
+
+          docker push "$IMAGE_SHA"
+          docker push "$IMAGE_LATEST"
+
+      # ---------------------------------------------------------
+      # BUILD AND PUSH ANALYTICS SERVICE
+      # ---------------------------------------------------------
+      - name: Build and push Analytics Service
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          IMAGE_SHA="$ECR_REGISTRY/analytics-service:$GITHUB_SHA"
+          IMAGE_LATEST="$ECR_REGISTRY/analytics-service:latest"
+
+          docker build \
+            -t "$IMAGE_SHA" \
+            -t "$IMAGE_LATEST" \
+            ./services/analytics-service
+
+          docker push "$IMAGE_SHA"
+          docker push "$IMAGE_LATEST"
+
+      # ---------------------------------------------------------
+      # CONNECT TO EKS
+      # ---------------------------------------------------------
       - name: Configure kubectl
+        shell: bash
         run: |
+          set -euo pipefail
+
           aws eks update-kubeconfig \
-            --name new-event-cluster \
-            --region $AWS_REGION
+            --name "$EKS_CLUSTER_NAME" \
+            --region "$AWS_REGION"
 
-      - name: Restart Deployments
+          kubectl get nodes
+          kubectl get deployments -n "$KUBERNETES_NAMESPACE"
+
+      # ---------------------------------------------------------
+      # BLUE-GREEN DEPLOYMENT FUNCTION
+      # ---------------------------------------------------------
+      - name: Blue-Green deploy all applications
+        shell: bash
         run: |
-          kubectl rollout restart deployment/frontend \
-            -n new-event
+          set -euo pipefail
 
-          kubectl rollout restart deployment/event-service \
-            -n new-event
+          deploy_blue_green() {
+            APP="$1"
+            PORT="$2"
+            HEALTH_PATH="$3"
 
-          kubectl rollout restart deployment/program-service \
-            -n new-event
+            SERVICE_NAME="$APP"
+            IMAGE="$ECR_REGISTRY/$APP:$GITHUB_SHA"
 
-          kubectl rollout restart deployment/registration-service \
-            -n new-event
+            echo "=================================================="
+            echo "Starting Blue-Green deployment for: $APP"
+            echo "Image: $IMAGE"
+            echo "=================================================="
 
-          kubectl rollout restart deployment/analytics-service \
-            -n new-event
+            ACTIVE_SLOT=$(kubectl get service "$SERVICE_NAME" \
+              -n "$KUBERNETES_NAMESPACE" \
+              -o jsonpath='{.spec.selector.slot}')
 
-      - name: Wait for rollout
+            if [ "$ACTIVE_SLOT" = "blue" ]; then
+              INACTIVE_SLOT="green"
+            elif [ "$ACTIVE_SLOT" = "green" ]; then
+              INACTIVE_SLOT="blue"
+            else
+              echo "Invalid active slot for $APP: $ACTIVE_SLOT"
+              exit 1
+            fi
+
+            ACTIVE_DEPLOYMENT="${APP}-${ACTIVE_SLOT}"
+            INACTIVE_DEPLOYMENT="${APP}-${INACTIVE_SLOT}"
+
+            echo "Active slot: $ACTIVE_SLOT"
+            echo "Inactive slot: $INACTIVE_SLOT"
+            echo "Active deployment: $ACTIVE_DEPLOYMENT"
+            echo "Target deployment: $INACTIVE_DEPLOYMENT"
+
+            # Confirm the inactive Deployment exists.
+            kubectl get deployment "$INACTIVE_DEPLOYMENT" \
+              -n "$KUBERNETES_NAMESPACE"
+
+            # Update the inactive environment with the new immutable image.
+            kubectl set image \
+              deployment/"$INACTIVE_DEPLOYMENT" \
+              "$APP=$IMAGE" \
+              -n "$KUBERNETES_NAMESPACE"
+
+            # Start two replicas in the inactive environment.
+            kubectl scale \
+              deployment/"$INACTIVE_DEPLOYMENT" \
+              --replicas=2 \
+              -n "$KUBERNETES_NAMESPACE"
+
+            # Wait until the inactive environment is healthy.
+            kubectl rollout status \
+              deployment/"$INACTIVE_DEPLOYMENT" \
+              -n "$KUBERNETES_NAMESPACE" \
+              --timeout=300s
+
+            kubectl wait \
+              --for=condition=Ready \
+              pod \
+              -l "app=$APP,slot=$INACTIVE_SLOT" \
+              -n "$KUBERNETES_NAMESPACE" \
+              --timeout=300s
+
+            # Obtain one ready pod IP from the inactive environment.
+            POD_IP=$(kubectl get pods \
+              -n "$KUBERNETES_NAMESPACE" \
+              -l "app=$APP,slot=$INACTIVE_SLOT" \
+              --field-selector=status.phase=Running \
+              -o jsonpath='{.items[0].status.podIP}')
+
+            if [ -z "$POD_IP" ]; then
+              echo "Unable to find a running $INACTIVE_SLOT pod for $APP."
+              exit 1
+            fi
+
+            echo "Testing inactive pod: http://$POD_IP:$PORT$HEALTH_PATH"
+
+            # Smoke-test the inactive environment from inside the cluster.
+            SMOKE_POD="smoke-${APP}-${GITHUB_RUN_NUMBER}"
+
+            kubectl delete pod "$SMOKE_POD" \
+              -n "$KUBERNETES_NAMESPACE" \
+              --ignore-not-found=true
+
+            kubectl run "$SMOKE_POD" \
+              -n "$KUBERNETES_NAMESPACE" \
+              --image=busybox:1.36 \
+              --restart=Never \
+              --rm \
+              -i \
+              --command -- \
+              wget \
+              --quiet \
+              --output-document=- \
+              --timeout=15 \
+              "http://$POD_IP:$PORT$HEALTH_PATH"
+
+            echo ""
+            echo "Smoke test passed for $APP on $INACTIVE_SLOT."
+
+            # Switch live traffic to the newly tested environment.
+            kubectl patch service "$SERVICE_NAME" \
+              -n "$KUBERNETES_NAMESPACE" \
+              --type=merge \
+              -p "{\"spec\":{\"selector\":{\"app\":\"$APP\",\"slot\":\"$INACTIVE_SLOT\"}}}"
+
+            # Confirm the selector was changed successfully.
+            NEW_ACTIVE_SLOT=$(kubectl get service "$SERVICE_NAME" \
+              -n "$KUBERNETES_NAMESPACE" \
+              -o jsonpath='{.spec.selector.slot}')
+
+            if [ "$NEW_ACTIVE_SLOT" != "$INACTIVE_SLOT" ]; then
+              echo "Traffic switch failed for $APP."
+              exit 1
+            fi
+
+            echo "Traffic successfully switched:"
+            echo "$APP: $ACTIVE_SLOT -> $INACTIVE_SLOT"
+
+            # Confirm that the Service now has endpoints.
+            sleep 5
+
+            ENDPOINTS=$(kubectl get endpoints "$SERVICE_NAME" \
+              -n "$KUBERNETES_NAMESPACE" \
+              -o jsonpath='{.subsets[*].addresses[*].ip}')
+
+            if [ -z "$ENDPOINTS" ]; then
+              echo "Service $SERVICE_NAME has no endpoints after switching."
+              echo "Rolling traffic back to $ACTIVE_SLOT."
+
+              kubectl patch service "$SERVICE_NAME" \
+                -n "$KUBERNETES_NAMESPACE" \
+                --type=merge \
+                -p "{\"spec\":{\"selector\":{\"app\":\"$APP\",\"slot\":\"$ACTIVE_SLOT\"}}}"
+
+              exit 1
+            fi
+
+            echo "Service endpoints: $ENDPOINTS"
+            echo "Blue-Green deployment completed for $APP."
+            echo ""
+          }
+
+          # Frontend
+          deploy_blue_green \
+            "frontend" \
+            "80" \
+            "/"
+
+          # Event Service
+          deploy_blue_green \
+            "event-service" \
+            "5000" \
+            "/health"
+
+          # Program Service
+          deploy_blue_green \
+            "program-service" \
+            "5001" \
+            "/health"
+
+          # Registration Service
+          deploy_blue_green \
+            "registration-service" \
+            "5002" \
+            "/health"
+
+          # Analytics Service
+          deploy_blue_green \
+            "analytics-service" \
+            "5003" \
+            "/health"
+
+      # ---------------------------------------------------------
+      # FINAL VERIFICATION
+      # ---------------------------------------------------------
+      - name: Verify active slots
+        shell: bash
         run: |
-          kubectl rollout status deployment/frontend \
-            -n new-event \
-            --timeout=300s
+          set -euo pipefail
 
-          kubectl rollout status deployment/event-service \
-            -n new-event \
-            --timeout=300s
+          echo "Current Service selectors:"
+          echo ""
 
-          kubectl rollout status deployment/program-service \
-            -n new-event \
-            --timeout=300s
+          for APP in \
+            frontend \
+            event-service \
+            program-service \
+            registration-service \
+            analytics-service
+          do
+            SLOT=$(kubectl get service "$APP" \
+              -n "$KUBERNETES_NAMESPACE" \
+              -o jsonpath='{.spec.selector.slot}')
 
-          kubectl rollout status deployment/registration-service \
-            -n new-event \
-            --timeout=300s
+            echo "$APP -> $SLOT"
+          done
 
-          kubectl rollout status deployment/analytics-service \
-            -n new-event \
-            --timeout=300s
+          echo ""
+          kubectl get deployments -n "$KUBERNETES_NAMESPACE"
+          echo ""
+          kubectl get pods -n "$KUBERNETES_NAMESPACE"
+          echo ""
+          kubectl get services -n "$KUBERNETES_NAMESPACE"
+
+      # ---------------------------------------------------------
+      # PUBLIC ENDPOINT TESTS
+      # ---------------------------------------------------------
+      - name: Test public application endpoints
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          BASE_URL="http://af5dffc3988b74481853873e24bda1fa-1523239162.ap-southeast-1.elb.amazonaws.com"
+
+          test_url() {
+            URL="$1"
+            NAME="$2"
+
+            echo "Testing $NAME: $URL"
+
+            STATUS_CODE=$(curl \
+              --silent \
+              --show-error \
+              --location \
+              --output /tmp/response.txt \
+              --write-out "%{http_code}" \
+              --max-time 30 \
+              "$URL")
+
+            cat /tmp/response.txt
+            echo ""
+            echo "HTTP status: $STATUS_CODE"
+
+            if [ "$STATUS_CODE" -lt 200 ] || [ "$STATUS_CODE" -ge 400 ]; then
+              echo "$NAME public endpoint test failed."
+              exit 1
+            fi
+          }
+
+          test_url \
+            "$BASE_URL/" \
+            "Frontend"
+
+          test_url \
+            "$BASE_URL/event-api/health" \
+            "Event Service"
+
+          test_url \
+            "$BASE_URL/program-api/health" \
+            "Program Service"
+
+          test_url \
+            "$BASE_URL/registration-api/health" \
+            "Registration Service"
+
+          test_url \
+            "$BASE_URL/analytics-api/health" \
+            "Analytics Service"

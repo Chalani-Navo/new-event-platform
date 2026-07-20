@@ -1,0 +1,648 @@
+# =========================================================
+# EVENT SERVICE - BLUE
+# =========================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: event-service-blue
+  namespace: new-event
+  labels:
+    app: event-service
+    slot: blue
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: event-service
+      slot: blue
+  template:
+    metadata:
+      labels:
+        app: event-service
+        slot: blue
+    spec:
+      serviceAccountName: event-service-sa
+      containers:
+        - name: event-service
+          image: 790304250595.dkr.ecr.ap-southeast-1.amazonaws.com/event-service:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 5000
+
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: new-event-secrets
+                  key: DATABASE_URL
+
+            - name: LOW_SEAT_LAMBDA_NAME
+              value: new-event-low-seat-alert
+
+            - name: AWS_REGION
+              value: ap-southeast-1
+
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 5000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 5000
+            initialDelaySeconds: 20
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 3
+
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "256Mi"
+
+---
+# =========================================================
+# EVENT SERVICE - GREEN
+# =========================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: event-service-green
+  namespace: new-event
+  labels:
+    app: event-service
+    slot: green
+spec:
+  replicas: 0
+  selector:
+    matchLabels:
+      app: event-service
+      slot: green
+  template:
+    metadata:
+      labels:
+        app: event-service
+        slot: green
+    spec:
+      serviceAccountName: event-service-sa
+      containers:
+        - name: event-service
+          image: 790304250595.dkr.ecr.ap-southeast-1.amazonaws.com/event-service:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 5000
+
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: new-event-secrets
+                  key: DATABASE_URL
+
+            - name: LOW_SEAT_LAMBDA_NAME
+              value: new-event-low-seat-alert
+
+            - name: AWS_REGION
+              value: ap-southeast-1
+
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 5000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 5000
+            initialDelaySeconds: 20
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 3
+
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "256Mi"
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: event-service
+  namespace: new-event
+spec:
+  selector:
+    app: event-service
+    slot: blue
+  ports:
+    - name: http
+      port: 5000
+      targetPort: 5000
+  type: ClusterIP
+
+---
+# =========================================================
+# PROGRAM SERVICE - BLUE
+# =========================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: program-service-blue
+  namespace: new-event
+  labels:
+    app: program-service
+    slot: blue
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: program-service
+      slot: blue
+  template:
+    metadata:
+      labels:
+        app: program-service
+        slot: blue
+    spec:
+      containers:
+        - name: program-service
+          image: 790304250595.dkr.ecr.ap-southeast-1.amazonaws.com/program-service:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 5001
+
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: new-event-secrets
+                  key: DATABASE_URL
+
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 5001
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 5001
+            initialDelaySeconds: 20
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 3
+
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "256Mi"
+
+---
+# =========================================================
+# PROGRAM SERVICE - GREEN
+# =========================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: program-service-green
+  namespace: new-event
+  labels:
+    app: program-service
+    slot: green
+spec:
+  replicas: 0
+  selector:
+    matchLabels:
+      app: program-service
+      slot: green
+  template:
+    metadata:
+      labels:
+        app: program-service
+        slot: green
+    spec:
+      containers:
+        - name: program-service
+          image: 790304250595.dkr.ecr.ap-southeast-1.amazonaws.com/program-service:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 5001
+
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: new-event-secrets
+                  key: DATABASE_URL
+
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 5001
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 5001
+            initialDelaySeconds: 20
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 3
+
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "256Mi"
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: program-service
+  namespace: new-event
+spec:
+  selector:
+    app: program-service
+    slot: blue
+  ports:
+    - name: http
+      port: 5001
+      targetPort: 5001
+  type: ClusterIP
+
+---
+# =========================================================
+# REGISTRATION SERVICE - BLUE
+# =========================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: registration-service-blue
+  namespace: new-event
+  labels:
+    app: registration-service
+    slot: blue
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: registration-service
+      slot: blue
+  template:
+    metadata:
+      labels:
+        app: registration-service
+        slot: blue
+    spec:
+      containers:
+        - name: registration-service
+          image: 790304250595.dkr.ecr.ap-southeast-1.amazonaws.com/registration-service:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 5002
+
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: new-event-secrets
+                  key: DATABASE_URL
+
+            - name: EVENT_SERVICE_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: new-event-config
+                  key: EVENT_SERVICE_URL
+
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 5002
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 5002
+            initialDelaySeconds: 20
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 3
+
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "256Mi"
+
+---
+# =========================================================
+# REGISTRATION SERVICE - GREEN
+# =========================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: registration-service-green
+  namespace: new-event
+  labels:
+    app: registration-service
+    slot: green
+spec:
+  replicas: 0
+  selector:
+    matchLabels:
+      app: registration-service
+      slot: green
+  template:
+    metadata:
+      labels:
+        app: registration-service
+        slot: green
+    spec:
+      containers:
+        - name: registration-service
+          image: 790304250595.dkr.ecr.ap-southeast-1.amazonaws.com/registration-service:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 5002
+
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: new-event-secrets
+                  key: DATABASE_URL
+
+            - name: EVENT_SERVICE_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: new-event-config
+                  key: EVENT_SERVICE_URL
+
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 5002
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 5002
+            initialDelaySeconds: 20
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 3
+
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "256Mi"
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: registration-service
+  namespace: new-event
+spec:
+  selector:
+    app: registration-service
+    slot: blue
+  ports:
+    - name: http
+      port: 5002
+      targetPort: 5002
+  type: ClusterIP
+
+---
+# =========================================================
+# ANALYTICS SERVICE - BLUE
+# =========================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: analytics-service-blue
+  namespace: new-event
+  labels:
+    app: analytics-service
+    slot: blue
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: analytics-service
+      slot: blue
+  template:
+    metadata:
+      labels:
+        app: analytics-service
+        slot: blue
+    spec:
+      containers:
+        - name: analytics-service
+          image: 790304250595.dkr.ecr.ap-southeast-1.amazonaws.com/analytics-service:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 5003
+
+          env:
+            - name: CLICKHOUSE_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: new-event-config
+                  key: CLICKHOUSE_HOST
+
+            - name: CLICKHOUSE_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: new-event-config
+                  key: CLICKHOUSE_PORT
+
+            - name: CLICKHOUSE_DATABASE
+              valueFrom:
+                configMapKeyRef:
+                  name: new-event-config
+                  key: CLICKHOUSE_DATABASE
+
+            - name: CLICKHOUSE_USER
+              valueFrom:
+                secretKeyRef:
+                  name: new-event-secrets
+                  key: CLICKHOUSE_USER
+
+            - name: CLICKHOUSE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: new-event-secrets
+                  key: CLICKHOUSE_PASSWORD
+
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 5003
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 5003
+            initialDelaySeconds: 30
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 3
+
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "256Mi"
+
+---
+# =========================================================
+# ANALYTICS SERVICE - GREEN
+# =========================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: analytics-service-green
+  namespace: new-event
+  labels:
+    app: analytics-service
+    slot: green
+spec:
+  replicas: 0
+  selector:
+    matchLabels:
+      app: analytics-service
+      slot: green
+  template:
+    metadata:
+      labels:
+        app: analytics-service
+        slot: green
+    spec:
+      containers:
+        - name: analytics-service
+          image: 790304250595.dkr.ecr.ap-southeast-1.amazonaws.com/analytics-service:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 5003
+
+          env:
+            - name: CLICKHOUSE_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: new-event-config
+                  key: CLICKHOUSE_HOST
+
+            - name: CLICKHOUSE_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: new-event-config
+                  key: CLICKHOUSE_PORT
+
+            - name: CLICKHOUSE_DATABASE
+              valueFrom:
+                configMapKeyRef:
+                  name: new-event-config
+                  key: CLICKHOUSE_DATABASE
+
+            - name: CLICKHOUSE_USER
+              valueFrom:
+                secretKeyRef:
+                  name: new-event-secrets
+                  key: CLICKHOUSE_USER
+
+            - name: CLICKHOUSE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: new-event-secrets
+                  key: CLICKHOUSE_PASSWORD
+
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 5003
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 5003
+            initialDelaySeconds: 30
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 3
+
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "256Mi"
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: analytics-service
+  namespace: new-event
+spec:
+  selector:
+    app: analytics-service
+    slot: blue
+  ports:
+    - name: http
+      port: 5003
+      targetPort: 5003
+  type: ClusterIP

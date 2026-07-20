@@ -1,0 +1,122 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend-blue
+  namespace: new-event
+  labels:
+    app: frontend
+    slot: blue
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: frontend
+      slot: blue
+  template:
+    metadata:
+      labels:
+        app: frontend
+        slot: blue
+    spec:
+      containers:
+        - name: frontend
+          image: 790304250595.dkr.ecr.ap-southeast-1.amazonaws.com/frontend:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 80
+
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 15
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 3
+
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "64Mi"
+            limits:
+              cpu: "250m"
+              memory: "128Mi"
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend-green
+  namespace: new-event
+  labels:
+    app: frontend
+    slot: green
+spec:
+  replicas: 0
+  selector:
+    matchLabels:
+      app: frontend
+      slot: green
+  template:
+    metadata:
+      labels:
+        app: frontend
+        slot: green
+    spec:
+      containers:
+        - name: frontend
+          image: 790304250595.dkr.ecr.ap-southeast-1.amazonaws.com/frontend:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 80
+
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 15
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 3
+
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "64Mi"
+            limits:
+              cpu: "250m"
+              memory: "128Mi"
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend
+  namespace: new-event
+spec:
+  selector:
+    app: frontend
+    slot: blue
+  ports:
+    - name: http
+      port: 80
+      targetPort: 80
+  type: ClusterIP
